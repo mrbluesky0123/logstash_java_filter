@@ -16,5 +16,3 @@ out/
 *.gem
 *.gemspec
 Gemfile*
-settings.gradle
-gradle.properties
