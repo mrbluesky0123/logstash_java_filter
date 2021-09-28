@@ -9,10 +9,8 @@ import co.elastic.logstash.api.LogstashPlugin;
 import co.elastic.logstash.api.PluginConfigSpec;
 import org.apache.commons.lang3.StringUtils;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
+import java.io.UnsupportedEncodingException;
+import java.util.*;
 
 // class name must match plugin name
 @LogstashPlugin(name = "telgrm_parsing_filter_tgw")
@@ -20,7 +18,7 @@ public class TelgrmParsingFilterTgw implements Filter {
 
     public static final PluginConfigSpec<String> SOURCE_CONFIG =
             PluginConfigSpec.stringSetting("source", "message");
-
+    public static Map<String, List<TelgrmInfo>> telgrmMap = new HashMap<>();
     private String id;
     private String sourceField;
     private TelgramInfoDao telgramInfoDao;
@@ -40,18 +38,44 @@ public class TelgrmParsingFilterTgw implements Filter {
 //                e.setField(sourceField, StringUtils.reverse((String)f));
                 String telgrmNo = ((String) f).substring(38, 42);
                 String telgrmString = ((String) f).substring(43);
-                List<TelgrmInfo> telgrmInfos = this.telgramInfoDao.getTelgrmInfo(telgrmNo);
+                byte [] telgrmByte = new byte[0];
+                try {
+                    telgrmByte = telgrmString.getBytes("euc-kr");
+                } catch (UnsupportedEncodingException unsupportedEncodingException) {
+                    unsupportedEncodingException.printStackTrace();
+                }
 
+                if(telgrmMap == null) {
+                    telgramInfoDao.getTelgrmInfo();
+                }
+
+                List<TelgrmInfo> telgrmInfos = telgrmMap.get(telgrmNo);
+                if(telgrmInfos == null || telgrmInfos.size() == 0) {
+                    return events;
+                }
                 Iterator<TelgrmInfo> it = telgrmInfos.iterator();
                 int telgrmLength = telgrmString.length();
                 int nextIndex = 0;
                 while(it.hasNext()) {
                     TelgrmInfo telgrmInfo = it.next();
-                    String stringToFill = "";
-                    if(nextIndex < telgrmLength) {
-                        stringToFill = telgrmString.substring(nextIndex, nextIndex + telgrmInfo.getFieldSize());
+                    int begin = nextIndex;
+                    if(nextIndex >= telgrmLength) {
+                        break;
                     }
-                    e.setField(telgrmInfo.getField(), stringToFill);
+                    int end = nextIndex + telgrmInfo.getFieldSize();
+                    if(end >= telgrmLength) {
+                        end = telgrmLength;
+                    }
+
+                    String nextField = "";
+                    byte[] nextFieldByte = Arrays.copyOfRange(telgrmByte, begin, end);
+                    try {
+                        nextField = new String(nextFieldByte, "euc-kr");
+                    } catch (UnsupportedEncodingException unsupportedEncodingException) {
+                        unsupportedEncodingException.printStackTrace();
+                    }
+
+                    e.setField(telgrmInfo.getField(), nextField);
                     nextIndex += telgrmInfo.getFieldSize();
                 }
 
